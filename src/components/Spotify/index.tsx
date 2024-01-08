@@ -1,104 +1,123 @@
-import React, { useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { SPOTIFY_CLIENT_ID } from '../../config';
-import { isNullOrEmpty } from '../../utils/helpers';
-import Spinner from '../Common/Spinner';
-import { createSpotifyPlaylist } from '../../services/PlaylistService';
-
-function generateCodeVerifier(length: number): string {
-  let text = '';
-  let possible =
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-
-  for (let i = 0; i < length; i++) {
-    text += possible.charAt(Math.floor(Math.random() * possible.length));
-  }
-  return text;
-}
-
-async function generateCodeChallenge(codeVerifier: string) {
-  const data = new TextEncoder().encode(codeVerifier);
-  const digest = await window.crypto.subtle.digest('SHA-256', data);
-  return btoa(String.fromCharCode.apply(null, [...new Uint8Array(digest)]))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-}
-
-async function getAccessToken(code: string) {
-  const verifier = localStorage.getItem('verifier');
-
-  const params = new URLSearchParams();
-  params.append('client_id', SPOTIFY_CLIENT_ID);
-  params.append('grant_type', 'authorization_code');
-  params.append('code', code);
-  params.append('redirect_uri', 'http://localhost:3000/migrate');
-  params.append('code_verifier', verifier!);
-
-  const result = await fetch('https://accounts.spotify.com/api/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params,
-  });
-
-  const { access_token } = await result.json();
-  return access_token;
-}
-
-async function migratePlaylist(token: string): Promise<any> {
-  const createPlaylistBody = {
-    "name": "Test Playlist 2",
-    "description": "Test playlist description",
-    "public": true
-}
-  const result = await createSpotifyPlaylist(token, 'jkpycj3kij4xy8ua19neexrl6', createPlaylistBody);
-  const data = await result.json();
-  return data;
-}
-
-function populateUI(profile: any) {
-  console.log('profile');
-  console.log(profile);
-  document.getElementById('displayName')!.innerText = profile.display_name;
-  if (profile.images[0]) {
-    const profileImage = new Image(200, 200);
-    profileImage.src = profile.images[0].url;
-    document.getElementById('avatar')!.appendChild(profileImage);
-  }
-  document.getElementById('id')!.innerText = profile.id;
-  document.getElementById('email')!.innerText = profile.email;
-  document.getElementById('uri')!.innerText = profile.uri;
-  document
-    .getElementById('uri')!
-    .setAttribute('href', profile.external_urls.spotify);
-  document.getElementById('url')!.innerText = profile.href;
-  document.getElementById('url')!.setAttribute('href', profile.href);
-  document.getElementById('imgUrl')!.innerText =
-    profile.images[0]?.url ?? '(no profile image)';
-}
+import React, { useEffect, useState } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
+import {
+  SPOTIFY_CLIENT_ID,
+  SPOTIFY_REDIRECT_URI,
+  SPOTIFY_SCOPES,
+} from "../../config";
+import { generateCodeVerifier, isNullOrEmpty } from "../../utils/helpers";
+import Spinner from "../Common/Spinner";
+import {
+  addItemsToSpotifyPlaylist,
+  createSpotifyPlaylist,
+  getSpotifyProfile,
+  searchItemOnSpotify,
+} from "../../services/PlaylistService";
 
 const Spotify: React.FC = () => {
+  const { state } = useLocation();
   const [searchParams] = useSearchParams();
-  const code = searchParams.get('code');
-  async function redirectToAuthCodeFlow() {
+  const code = searchParams.get("code");
+  const [loading, setLoading] = useState(false);
+  const [successResults, setSuccessResults] = useState([]);
+  const [failedResults, setFailedResults] = useState([]);
+
+  async function createPlaylist(token: string, userId: string): Promise<any> {
+    const createPlaylistBody = {
+      name: state.outputPlaylistName,
+      description: `"${state.outputPlaylistName}" playlist created on Spotify from Youtube. Powered by "Playlist To Go"!`,
+      public: true,
+    };
+    const result = await createSpotifyPlaylist(
+      token,
+      userId,
+      createPlaylistBody
+    );
+    const data = await result.json();
+    return data;
+  }
+
+  async function getProfile(token: string): Promise<any> {
+    const result = await getSpotifyProfile(token);
+    const data = await result.json();
+    return data;
+  }
+
+  function populateUI(data: any) {
+    document.getElementById("uri")!.innerText = data.uri;
+    document
+      .getElementById("uri")!
+      .setAttribute("href", data.external_urls.spotify);
+  }
+  async function startDataMigration() {
     const verifier = generateCodeVerifier(128);
-    const challenge = await generateCodeChallenge(verifier);
+    localStorage.setItem("verifier", verifier);
 
-    localStorage.setItem('verifier', verifier);
-
-    const params = new URLSearchParams();
-    params.append('client_id', SPOTIFY_CLIENT_ID);
-    params.append('response_type', 'code');
-    params.append('redirect_uri', 'http://localhost:3000/migrate');
-    params.append('scope', 'user-read-private user-read-email playlist-modify-public');
-    params.append('code_challenge_method', 'S256');
-    params.append('code_challenge', challenge);
-
-    document.location = `https://accounts.spotify.com/authorize?${params.toString()}`;
+    const popup = window.open(
+      `https://accounts.spotify.com/authorize?client_id=${SPOTIFY_CLIENT_ID}&response_type=token&redirect_uri=${SPOTIFY_REDIRECT_URI}&scope=${SPOTIFY_SCOPES}&show_dialog=true`,
+      "Login with Spotify"
+    );
+    window.spotifyCallback = async (token: string) => {
+      popup.close();
+      setLoading(false);
+      const profileData = await getProfile(token);
+      try {
+        const playlistData = await createPlaylist(token, profileData.id);
+        populateUI(playlistData);
+        const playlistId = playlistData.id;
+        const searchSuccessful: Array<string> = [];
+        const searchFailed: Array<string> = [];
+        const youtubeItems = state.sourcePlaylistData?.items;
+        const searchComplete = await youtubeItems.map(
+          async (youtubeItem: Object) => {
+            const artist = youtubeItem.snippet.videoOwnerChannelTitle.replace(
+              " - Topic",
+              ""
+            );
+            const track = youtubeItem.snippet.title;
+            const queryString = `track:${track} artist:${artist}`;
+            try {
+              const searchResponse = await searchItemOnSpotify(
+                token,
+                queryString
+              );
+              const searchData = await searchResponse.json();
+              const searchedUri = searchData?.tracks?.items[0]?.uri;
+              !isNullOrEmpty(searchedUri)
+                ? searchSuccessful.push(searchedUri)
+                : searchFailed.push(searchedUri);
+              return searchedUri;
+            } catch (searchErr) {
+              console.log("Error fetching / searching data ", searchErr);
+            }
+          }
+        );
+        Promise.allSettled(searchComplete).then((results) => {
+          setSuccessResults(searchSuccessful);
+          setFailedResults(searchFailed);
+          const searchResults = results.map((result) => {
+            if (result.status === "fulfilled" && !isNullOrEmpty(result.value)) {
+              return result.value;
+            }
+          });
+          addItemsToSpotifyPlaylist(token, playlistId, {
+            uris: searchResults.filter((res) => res),
+            position: 0,
+          });
+        });
+      } catch (playlistErr) {
+        console.log("Error creating playlist ", playlistErr);
+      }
+    };
   }
   const intitialize = async () => {
+    const token = window.location.hash.substr(1).split("&")[0].split("=")[1];
+    if (token) {
+      window.opener.spotifyCallback(token);
+    }
     if (!code) {
-      await redirectToAuthCodeFlow();
+      setLoading(true);
+      await startDataMigration();
     }
   };
 
@@ -106,43 +125,26 @@ const Spotify: React.FC = () => {
     intitialize();
   }, []);
 
-  useEffect(() => {
-    if (!code) return;
-    getAccessToken(code).then((accessToken) => {
-      migratePlaylist(accessToken).then((data) => {
-        window.location.replace('success');
-        console.log('data');
-        console.log(data);
-      });
-    });
-  }, [code]);
-
-  return isNullOrEmpty(code) ? <Spinner loading={true} /> : (
+  return loading ? (
+    <Spinner loading={loading} />
+  ) : (
     <>
-      <h1>Display your Spotify profile data</h1>
+      <h1>Youtube To Spotify Playlist Migration</h1>
+      <h3>Results</h3>
 
       <section id="profile">
         <h2>
-          Logged in as <span id="displayName"></span>
+          Spotify Playlist Created: <a id="uri" href="#"></a>
         </h2>
-        <span id="avatar"></span>
-        <ul>
-          <li>
-            User ID: <span id="id"></span>
-          </li>
-          <li>
-            Email: <span id="email"></span>
-          </li>
-          <li>
-            Spotify URI: <a id="uri" href="#"></a>
-          </li>
-          <li>
-            Link: <a id="url" href="#"></a>
-          </li>
-          <li>
-            Profile Image: <span id="imgUrl"></span>
-          </li>
-        </ul>
+        {successResults.length > 0 && (
+          <p>Successfully added {successResults.length} tracks. </p>
+        )}
+        {failedResults.length > 0 && (
+          <p>
+            Failed to add {failedResults.length} tracks because either they were
+            private or not found on Spotify.{" "}
+          </p>
+        )}
       </section>
     </>
   );
