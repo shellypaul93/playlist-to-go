@@ -1,4 +1,4 @@
-import { SET_PLAYLIST_ID, SET_PLAYLIST_RESULTS, SET_OUTPUT_PLAYLIST_NAME } from '../constants';
+import { SET_PLAYLIST_ID, SET_PLAYLIST_RESULTS, SET_OUTPUT_PLAYLIST_NAME, SET_INPUT_FORM_ERROR, SET_OUPUT_FORM_ERROR } from '../constants';
 
 const appInitialState = {
   userState: {
@@ -8,6 +8,8 @@ const appInitialState = {
     profilePicture: '',
   },
   inputPlaylistId: '',
+  inputFormError: false,
+  outputFormError: false,
   outputPlaylistName: '',
   playlistResults: {},
 };
@@ -31,6 +33,16 @@ function appReducer(
       return {
         ...state,
         outputPlaylistName: action.payload,
+      };
+    case SET_INPUT_FORM_ERROR:
+      return {
+        ...state,
+        inputFormError: action.payload,
+      };
+    case SET_OUPUT_FORM_ERROR:
+      return {
+        ...state,
+        outputFormError: action.payload,
       };
     default:
       break;

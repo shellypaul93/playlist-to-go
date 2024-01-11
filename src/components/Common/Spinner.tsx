@@ -13,7 +13,7 @@ const override: CSSProperties = {
 const Spinner: React.FC<SpinnerProps> = ({ loading }) => {
   return (
     <HashLoader
-      color={'#36d7b7'}
+      color={'#9333ea'}
       loading={loading}
       cssOverride={override}
       size={150}

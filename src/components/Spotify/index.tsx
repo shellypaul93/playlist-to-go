@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import {
   SPOTIFY_CLIENT_ID,
   SPOTIFY_REDIRECT_URI,
@@ -13,9 +13,17 @@ import {
   getSpotifyProfile,
   searchItemOnSpotify,
 } from "../../services/PlaylistService";
+import CompleteLogo from "../Complete.svg";
 
-const Spotify: React.FC = () => {
-  const { state } = useLocation();
+interface SpotifyProps {
+  sourcePlaylistData: Object;
+  outputPlaylistName: string;
+}
+
+const Spotify: React.FC<SpotifyProps> = ({
+  sourcePlaylistData,
+  outputPlaylistName,
+}) => {
   const [searchParams] = useSearchParams();
   const code = searchParams.get("code");
   const [loading, setLoading] = useState(false);
@@ -24,8 +32,8 @@ const Spotify: React.FC = () => {
 
   async function createPlaylist(token: string, userId: string): Promise<any> {
     const createPlaylistBody = {
-      name: state.outputPlaylistName,
-      description: `"${state.outputPlaylistName}" playlist created on Spotify from Youtube. Powered by "Playlist To Go"!`,
+      name: outputPlaylistName,
+      description: `"${outputPlaylistName}" playlist created on Spotify from Youtube. Powered by "Playlist To Go"!`,
       public: true,
     };
     const result = await createSpotifyPlaylist(
@@ -44,7 +52,7 @@ const Spotify: React.FC = () => {
   }
 
   function populateUI(data: any) {
-    document.getElementById("uri")!.innerText = data.uri;
+    document.getElementById("uri")!.innerText = outputPlaylistName;
     document
       .getElementById("uri")!
       .setAttribute("href", data.external_urls.spotify);
@@ -67,14 +75,17 @@ const Spotify: React.FC = () => {
         const playlistId = playlistData.id;
         const searchSuccessful: Array<string> = [];
         const searchFailed: Array<string> = [];
-        const youtubeItems = state.sourcePlaylistData?.items;
+        const youtubeItems = sourcePlaylistData?.items;
         const searchComplete = await youtubeItems.map(
           async (youtubeItem: Object) => {
             const artist = youtubeItem.snippet.videoOwnerChannelTitle.replace(
               " - Topic",
               ""
             );
-            const track = youtubeItem.snippet.title;
+            const track = youtubeItem.snippet.title.replace(
+              " (Original Mix)",
+              ""
+            );
             const queryString = `track:${track} artist:${artist}`;
             try {
               const searchResponse = await searchItemOnSpotify(
@@ -125,28 +136,48 @@ const Spotify: React.FC = () => {
     intitialize();
   }, []);
 
-  return loading ? (
-    <Spinner loading={loading} />
-  ) : (
-    <>
-      <h1>Youtube To Spotify Playlist Migration</h1>
-      <h3>Results</h3>
+  return (
+    <div className="border border-solid border-white rounded m-5 p-3 h-screen w-1/2 overflow-scroll">
+      {loading ? (
+        <Spinner loading={loading} />
+      ) : (
+        <div className="mx-auto">
+          <div className="border border-solid border-white rounded p-2 text-center">
+            <h1 className="text-gray-100 text-xl">
+              Youtube To Spotify Playlist Migration
+            </h1>
+          </div>
 
-      <section id="profile">
-        <h2>
-          Spotify Playlist Created: <a id="uri" href="#"></a>
-        </h2>
-        {successResults.length > 0 && (
-          <p>Successfully added {successResults.length} tracks. </p>
-        )}
-        {failedResults.length > 0 && (
-          <p>
-            Failed to add {failedResults.length} tracks because either they were
-            private or not found on Spotify.{" "}
-          </p>
-        )}
-      </section>
-    </>
+          <section className="my-3" id="profile">
+            <div className="flex items-center flex-row">
+              <img
+                className="w-10 h-10 px-1"
+                src={CompleteLogo}
+                alt="Youtube to Spotify migration completed"
+              />
+              <h2 className="text-gray-100 text-lg">
+                Spotify Playlist Created: <a id="uri" href="#"></a>
+              </h2>
+            </div>
+            <div className="my-3">
+              {successResults.length > 0 && (
+                <p className="text-gray-100">
+                  Successfully added {successResults.length} tracks.{" "}
+                </p>
+              )}
+            </div>
+            <div className="my-3">
+              {failedResults.length > 0 && (
+                <p className="text-gray-100">
+                  Failed to add {failedResults.length} tracks because either
+                  they were private or not found on Spotify.{" "}
+                </p>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
   );
 };
 

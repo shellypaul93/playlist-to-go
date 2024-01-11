@@ -4,26 +4,23 @@ import { isNullOrEmpty } from "../../utils/helpers";
 import { getYoutubePlaylist } from "../../services/PlaylistService";
 import appReducer, { appInitialState } from "../../state/appReducer";
 import {
+  SET_INPUT_FORM_ERROR,
+  SET_OUPUT_FORM_ERROR,
   SET_OUTPUT_PLAYLIST_NAME,
   SET_PLAYLIST_ID,
   SET_PLAYLIST_RESULTS,
 } from "../../constants";
 import { YOUTUBE_CLIENT_ID, YOUTUBE_SCOPES } from "../../config";
-import Spotify from "../Spotify";
-import { Link, useNavigate } from "react-router-dom";
 import Spinner from "../Common/Spinner";
+import Header from "../Common/Header";
+import Spotify from "../Spotify";
+import YoutubeInput from "../Youtube/YoutubeInput";
+import SpotifyInput from "../Spotify/SpotifyInput";
 
 const Home: React.FC = () => {
-  const inputRef = useRef(null);
-  const navigate = useNavigate();
   const [state, dispatch] = React.useReducer(appReducer, appInitialState);
-  const [userState, setUserState] = useState({
-    loggedIn: false,
-    firstName: "",
-    lastname: "",
-    profilePicture: "",
-  });
   const [loading, setLoading] = useState(false);
+  const [showSpotify, setShowSpotify] = useState(false);
   const [tokenClient, setTokenClient] = useState(undefined);
   const playListId = state.inputPlaylistId;
   const newPlaylistName = state.outputPlaylistName;
@@ -77,34 +74,46 @@ const Home: React.FC = () => {
       payload: data,
     });
   };
-  const handleSubmit = () => {
-    const inputBox = document.getElementById("playListId");
+  const handleYoutubeSubmit = () => {
     if (isNullOrEmpty(playListId)) {
-      inputRef.current.focus();
-      inputBox.style.borderColor = "red";
+      dispatch({
+        type: SET_INPUT_FORM_ERROR,
+        payload: true,
+      });
       return;
     }
     setLoading(true);
-    inputBox.style.borderColor = "silver";
+    dispatch({
+      type: SET_INPUT_FORM_ERROR,
+      payload: false,
+    });
     tokenClient.requestAccessToken();
   };
 
-  const handleInputKeyUp = (value: string) => {
+  const handleYoutubeInput = (value: string) => {
     dispatch({
       type: SET_PLAYLIST_ID,
       payload: value,
     });
-    const inputBox = document.getElementById("playListId");
-    inputBox.style.borderColor = "silver";
+    dispatch({
+      type: SET_INPUT_FORM_ERROR,
+      payload: false,
+    });
   };
 
   const handleMigrationSubmit = () => {
-    navigate("/migrate", {
-      state: {
-        sourcePlaylistData: state.playlistResults,
-        outputPlaylistName: newPlaylistName,
-      },
+    if (isNullOrEmpty(newPlaylistName)) {
+      dispatch({
+        type: SET_OUPUT_FORM_ERROR,
+        payload: true,
+      });
+      return;
+    }
+    dispatch({
+      type: SET_OUPUT_FORM_ERROR,
+      payload: false,
     });
+    setShowSpotify(true);
   };
 
   const handleMigrationInputKeyUp = (value: string) => {
@@ -112,39 +121,47 @@ const Home: React.FC = () => {
       type: SET_OUTPUT_PLAYLIST_NAME,
       payload: value,
     });
+    dispatch({
+      type: SET_OUPUT_FORM_ERROR,
+      payload: false,
+    });
   };
 
-  return loading ? (
-    <Spinner loading={loading} />
-  ) : (
-    <main>
-      {userState?.loggedIn ? (
-        <h1>Welcome {userState.firstName}</h1>
-      ) : (
-        <div id="signInDiv" />
-      )}
-      <br />
-      <input
-        id="playListId"
-        ref={inputRef}
-        onKeyUp={(e) => handleInputKeyUp(e.target.value)}
-      />
-      <br />
-      <button onClick={handleSubmit}>Get My Playlist!</button>
-      <YoutubePlaylist YTplayListData={state.playlistResults} />
-      <br />
-      <br />
-      {isNullOrEmpty(state.playlistResults) ? null : (
-        <div>
-          <p>Enter a new Spotify playlist name</p>
-          <input
-            id="newPlaylistName"
-            onKeyUp={(e) => handleMigrationInputKeyUp(e.target.value)}
-          ></input>
-          <button onClick={handleMigrationSubmit}>Migrate to Spotify</button>
-        </div>
-      )}
-    </main>
+  return (
+    <>
+      <Header />
+      <main className="h-full w-full my-o mx-2">
+        {loading ? (
+          <Spinner loading={loading} />
+        ) : (
+          <div className="flex flex-col-reverse md:flex-row items-center">
+            {isNullOrEmpty(state.playlistResults) ? (
+              <YoutubeInput
+                handleInput={handleYoutubeInput}
+                handleSubmit={handleYoutubeSubmit}
+                isError={state.inputFormError}
+              />
+            ) : (
+              <>
+                <YoutubePlaylist YTplayListData={state.playlistResults} />
+                {showSpotify ? (
+                  <Spotify
+                    sourcePlaylistData={state.playlistResults}
+                    outputPlaylistName={newPlaylistName}
+                  />
+                ) : (
+                  <SpotifyInput
+                    handleInput={handleMigrationInputKeyUp}
+                    handleSubmit={handleMigrationSubmit}
+                    isError={state.outputFormError}
+                  />
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </main>
+    </>
   );
 };
 
