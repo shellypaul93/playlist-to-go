@@ -18,11 +18,13 @@ import CompleteLogo from "../Complete.svg";
 interface SpotifyProps {
   sourcePlaylistData: Object;
   outputPlaylistName: string;
+  setFailedMigrationItems: Function;
 }
 
 const Spotify: React.FC<SpotifyProps> = ({
   sourcePlaylistData,
   outputPlaylistName,
+  setFailedMigrationItems,
 }) => {
   const [searchParams] = useSearchParams();
   const code = searchParams.get("code");
@@ -76,6 +78,7 @@ const Spotify: React.FC<SpotifyProps> = ({
         const searchSuccessful: Array<string> = [];
         const searchFailed: Array<string> = [];
         const youtubeItems = sourcePlaylistData?.items;
+        const failedSearchItems: Array<Object> = [];
         const searchComplete = await youtubeItems.map(
           async (youtubeItem: Object) => {
             const artist = youtubeItem.snippet.videoOwnerChannelTitle.replace(
@@ -97,6 +100,9 @@ const Spotify: React.FC<SpotifyProps> = ({
               !isNullOrEmpty(searchedUri)
                 ? searchSuccessful.push(searchedUri)
                 : searchFailed.push(searchedUri);
+              if (isNullOrEmpty(searchedUri)) {
+                failedSearchItems.push(youtubeItem);
+              }
               return searchedUri;
             } catch (searchErr) {
               console.log("Error fetching / searching data ", searchErr);
@@ -104,6 +110,7 @@ const Spotify: React.FC<SpotifyProps> = ({
           }
         );
         Promise.allSettled(searchComplete).then((results) => {
+          setFailedMigrationItems(failedSearchItems);
           setSuccessResults(searchSuccessful);
           setFailedResults(searchFailed);
           const searchResults = results.map((result) => {

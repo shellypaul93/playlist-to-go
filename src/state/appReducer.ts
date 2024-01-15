@@ -1,4 +1,4 @@
-import { SET_PLAYLIST_ID, SET_PLAYLIST_RESULTS, SET_OUTPUT_PLAYLIST_NAME, SET_INPUT_FORM_ERROR, SET_OUPUT_FORM_ERROR } from '../constants';
+import { SET_PLAYLIST_ID, SET_PLAYLIST_RESULTS, SET_OUTPUT_PLAYLIST_NAME, SET_INPUT_FORM_ERROR, SET_OUPUT_FORM_ERROR, SET_FAILED_MIGRATION_ITEMS } from '../constants';
 
 const appInitialState = {
   userState: {
@@ -12,6 +12,7 @@ const appInitialState = {
   outputFormError: false,
   outputPlaylistName: '',
   playlistResults: {},
+  failedMigrationItems: [],
 };
 
 function appReducer(
@@ -43,6 +44,11 @@ function appReducer(
       return {
         ...state,
         outputFormError: action.payload,
+      };
+    case SET_FAILED_MIGRATION_ITEMS:
+      return {
+        ...state,
+        failedMigrationItems: action.payload,
       };
     default:
       break;

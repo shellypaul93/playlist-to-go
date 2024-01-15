@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import YoutubePlaylist from "../Youtube/YoutubePlaylist";
 import { isNullOrEmpty } from "../../utils/helpers";
 import { getYoutubePlaylist } from "../../services/PlaylistService";
 import appReducer, { appInitialState } from "../../state/appReducer";
 import {
+  SET_FAILED_MIGRATION_ITEMS,
   SET_INPUT_FORM_ERROR,
   SET_OUPUT_FORM_ERROR,
   SET_OUTPUT_PLAYLIST_NAME,
@@ -26,12 +27,6 @@ const Home: React.FC = () => {
   const newPlaylistName = state.outputPlaylistName;
 
   const handleCallbackResponse = (response: any) => {
-    setUserState({
-      loggedIn: true,
-      firstName: "",
-      lastname: "",
-      profilePicture: "",
-    });
     const signInDiv = document.getElementById("signInDiv");
     if (isNullOrEmpty(signInDiv)) return;
     signInDiv.style.display = "none";
@@ -127,6 +122,13 @@ const Home: React.FC = () => {
     });
   };
 
+  const setFailedMigrationItems = (failedItems: Array<Object>) => {
+    dispatch({
+      type: SET_FAILED_MIGRATION_ITEMS,
+      payload: failedItems,
+    });
+  };
+
   return (
     <>
       <Header />
@@ -143,11 +145,15 @@ const Home: React.FC = () => {
               />
             ) : (
               <>
-                <YoutubePlaylist YTplayListData={state.playlistResults} />
+                <YoutubePlaylist 
+                YTplayListData={state.playlistResults}
+                failedMigrationItems={state.failedMigrationItems}
+                />
                 {showSpotify ? (
                   <Spotify
                     sourcePlaylistData={state.playlistResults}
                     outputPlaylistName={newPlaylistName}
+                    setFailedMigrationItems={setFailedMigrationItems}
                   />
                 ) : (
                   <SpotifyInput
